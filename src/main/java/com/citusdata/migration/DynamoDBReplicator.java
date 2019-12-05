@@ -24,7 +24,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.auth.AWSCredentialsProviderChain;
+import com.amazonaws.internal.StaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBStreams;
@@ -42,87 +44,28 @@ public class DynamoDBReplicator {
 
 	private static final Log LOG = LogFactory.getLog(DynamoDBReplicator.class);
 
-	public static void main(String[] args) throws SQLException, IOException {
-		Options options = new Options();
-
-		Option help = new Option("h", "help", false, "Show help");
-		help.setRequired(false);
-		options.addOption(help);
-
-		Option dynamoDBTableOption = new Option("t", "table", true, "DynamoDB table name(s) to replicate");
-		dynamoDBTableOption.setRequired(false);
-		options.addOption(dynamoDBTableOption);
-
-		Option postgresURLOption = new Option("u", "postgres-jdbc-url", true, "PostgreSQL JDBC URL of the destination");
-		postgresURLOption.setRequired(false);
-		options.addOption(postgresURLOption);
-
-		Option noSchemaOption = new Option("s", "schema", false, "Replicate the table schema");
-		noSchemaOption.setRequired(false);
-		options.addOption(noSchemaOption);
-
-		Option noDataOption = new Option("d", "data", false, "Replicate the current data");
-		noDataOption.setRequired(false);
-		options.addOption(noDataOption);
-
-		Option noChangesOption = new Option("c", "changes", false, "Continuously replicate changes");
-		noChangesOption.setRequired(false);
-		options.addOption(noChangesOption);
-
-		Option citusOption = new Option("x", "citus", false, "Create distributed tables using Citus");
-		citusOption.setRequired(false);
-		options.addOption(citusOption);
-
-		Option conversionModeOption = new Option("m", "conversion-mode", true, "Conversion mode, either columns or jsonb (default: columns)");
-		conversionModeOption.setRequired(false);
-		options.addOption(conversionModeOption);
-
-		Option lowerCaseColumnsOption = new Option("lc", "lower-case-column-names", false, "Use lower case column names");
-		lowerCaseColumnsOption.setRequired(false);
-		options.addOption(lowerCaseColumnsOption);
-
-		Option numConnectionsOption = new Option("n", "num-connections", true, "Database connection pool size (default 16)");
-		numConnectionsOption.setRequired(false);
-		options.addOption(numConnectionsOption);
-
-		Option maxScanRateOption = new Option("r", "scan-rate", true, "Maximum reads/sec during scan (default 25)");
-		maxScanRateOption.setRequired(false);
-		options.addOption(maxScanRateOption);
-
-		CommandLineParser parser = new DefaultParser();
-		HelpFormatter formatter = new HelpFormatter();
-		formatter.setWidth(120);
-
+	public static void replicate(String url, String pgSchema, boolean struct, String tables, String access, String key) throws SQLException, IOException {
 		try {
-			CommandLine cmd = parser.parse(options, args);
+			boolean replicateSchema = struct;//cmd.hasOption("schema");
+			boolean replicateData = !struct;//cmd.hasOption("data");
+			boolean replicateChanges = false;//cmd.hasOption("changes");
 
-			boolean wantHelp = cmd.hasOption("help");
-			boolean replicateSchema = cmd.hasOption("schema");
-			boolean replicateData = cmd.hasOption("data");
-			boolean replicateChanges = cmd.hasOption("changes");
-
-			if (wantHelp || (!replicateSchema && !replicateData && !replicateChanges)) {
-				formatter.printHelp("podyn", options);
-				return;
-			}
-
-			boolean useCitus = cmd.hasOption("citus");
-			boolean useLowerCaseColumnNames = cmd.hasOption("lower-case-column-names");
-			int maxScanRate = Integer.parseInt(cmd.getOptionValue("scan-rate", "25"));
-			int dbConnectionCount = Integer.parseInt(cmd.getOptionValue("num-connections", "16"));
-			String tableNamesString = cmd.getOptionValue("table");
-			String postgresURL = cmd.getOptionValue("postgres-jdbc-url");
-			String conversionModeString = cmd.getOptionValue("conversion-mode", ConversionMode.columns.name());
+			boolean useCitus = false;//cmd.hasOption("citus");
+			boolean useLowerCaseColumnNames = false;//cmd.hasOption("lower-case-column-names");
+			int maxScanRate = 25;//Integer.parseInt(cmd.getOptionValue("scan-rate", "25"));
+			int dbConnectionCount = 16;//Integer.parseInt(cmd.getOptionValue("num-connections", "16"));
+			String tableNamesString = tables;//cmd.getOptionValue("table");
+			String postgresURL = url;//cmd.getOptionValue("postgres-jdbc-url");
+			String conversionModeString = ConversionMode.columns.name();//cmd.getOptionValue("conversion-mode", ConversionMode.columns.name());
 
 			ConversionMode conversionMode;
-
 			try {
 				conversionMode = ConversionMode.valueOf(conversionModeString);
 			} catch (IllegalArgumentException e) {
 				throw new ParseException("invalid conversion mode: " + conversionModeString);
 			}
 
-			AWSCredentialsProvider credentialsProvider = new DefaultAWSCredentialsProviderChain();
+			AWSCredentialsProvider credentialsProvider = new AWSCredentialsProviderChain(new StaticCredentialsProvider(new BasicAWSCredentials(access, key)));
 
 			AmazonDynamoDB dynamoDBClient = AmazonDynamoDBClientBuilder.standard().
 					withCredentials(credentialsProvider).
@@ -133,7 +76,6 @@ public class DynamoDBReplicator {
 					build();
 
 			final TableEmitter emitter;
-
 			if (postgresURL != null) {
 				List<TableEmitter> emitters = new ArrayList<>();
 
@@ -156,7 +98,6 @@ public class DynamoDBReplicator {
 			List<DynamoDBTableReplicator> replicators = new ArrayList<>();
 
 			List<String> tableNames = new ArrayList<>();
-
 			if (tableNamesString != null) {
 				tableNames = Arrays.asList(tableNamesString.split(","));
 			} else {
@@ -172,8 +113,7 @@ public class DynamoDBReplicator {
 
 			for(String tableName : tableNames) {
 				DynamoDBTableReplicator replicator = new DynamoDBTableReplicator(
-						dynamoDBClient, streamsClient, credentialsProvider, executor, emitter, tableName);
-
+						dynamoDBClient, streamsClient, credentialsProvider, executor, emitter, tableName, pgSchema);
 				replicator.setAddColumnEnabled(true);
 				replicator.setUseCitus(useCitus);
 				replicator.setUseLowerCaseColumnNames(useLowerCaseColumnNames);
@@ -185,7 +125,6 @@ public class DynamoDBReplicator {
 			if (replicateSchema) {
 				for(DynamoDBTableReplicator replicator : replicators) {
 					LOG.info(String.format("Constructing table schema for table %s", replicator.dynamoTableName));
-
 					replicator.replicateSchema();
 				}
 			}
@@ -194,6 +133,7 @@ public class DynamoDBReplicator {
 				List<Future<Long>> futureResults = new ArrayList<Future<Long>>();
 
 				for(DynamoDBTableReplicator replicator : replicators) {
+					replicator.replicateSchema();
 					LOG.info(String.format("Replicating data for table %s", replicator.dynamoTableName));
 					Future<Long> futureResult = replicator.startReplicatingData(maxScanRate);
 					futureResults.add(futureResult);
@@ -215,7 +155,6 @@ public class DynamoDBReplicator {
 
 		} catch (ParseException e) {
 			LOG.error(e.getMessage());
-			formatter.printHelp("podyn", options);
 			System.exit(3);
 		} catch (TableExistsException|NonExistingTableException e) {
 			LOG.error(e.getMessage());

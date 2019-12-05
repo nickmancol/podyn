@@ -8,6 +8,9 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,15 +27,20 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBStreams;
 import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.document.ItemCollection;
+import com.amazonaws.services.dynamodbv2.document.QueryOutcome;
 import com.amazonaws.services.dynamodbv2.document.internal.InternalUtils;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.Condition;
 import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
 import com.amazonaws.services.dynamodbv2.model.GlobalSecondaryIndexDescription;
 import com.amazonaws.services.dynamodbv2.model.InternalServerErrorException;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.dynamodbv2.model.KeyType;
 import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughputExceededException;
+import com.amazonaws.services.dynamodbv2.model.QueryRequest;
 import com.amazonaws.services.dynamodbv2.model.Record;
 import com.amazonaws.services.dynamodbv2.model.ReturnConsumedCapacity;
 import com.amazonaws.services.dynamodbv2.model.ScanRequest;
@@ -85,6 +93,7 @@ public class DynamoDBTableReplicator {
 
 	final TableEmitter emitter;
 	final String dynamoTableName;
+	final String schemaName;
 
 	boolean addColumnsEnabled;
 	boolean useCitus;
@@ -99,7 +108,8 @@ public class DynamoDBTableReplicator {
 			AWSCredentialsProvider awsCredentialsProvider,
 			ExecutorService executorService,
 			TableEmitter emitter,
-			String tableName) throws SQLException {
+			String tableName,
+			String schemaName) throws SQLException {
 		this.dynamoDBClient = dynamoDBClient;
 		this.streamsClient = streamsClient;
 		this.awsCredentialsProvider = awsCredentialsProvider;
@@ -109,7 +119,8 @@ public class DynamoDBTableReplicator {
 		this.addColumnsEnabled = true;
 		this.useCitus = false;
 		this.useLowerCaseColumnNames = false;
-		this.tableSchema = emitter.fetchSchema(this.dynamoTableName);
+		this.schemaName = schemaName == null ? "public" : schemaName;
+		this.tableSchema = emitter.fetchSchema(this.dynamoTableName, this.schemaName);
 	}
 
 	public void setUseCitus(boolean useCitus) {
@@ -137,16 +148,14 @@ public class DynamoDBTableReplicator {
 	}
 
 	public void replicateSchema() throws TableExistsException {
-		if (tableSchema != null) {
-			throw new TableExistsException("relation %s already exists", dynamoTableName);
+		if (tableSchema == null) {
+			tableSchema = fetchSourceSchema();
+			emitter.createTable(tableSchema);
 		}
-
-		tableSchema = fetchSourceSchema();
-		emitter.createTable(tableSchema);
 	}
 
 	TableSchema fetchSourceSchema() {
-		TableSchema tableSchema = new TableSchema(dynamoTableName);
+		TableSchema tableSchema = new TableSchema(dynamoTableName, schemaName);
 
 		DescribeTableResult describeTableResult = dynamoDBClient.describeTable(dynamoTableName);
 		TableDescription tableDescription = describeTableResult.getTable();
@@ -225,15 +234,34 @@ public class DynamoDBTableReplicator {
 		});
 	}
 
+	private Map<String, Condition> getMaxPkFilterConditions(TableSchema tableSchema) {
+		Map<String, Condition> res = null;
+		Map<String,Object> maxPk = emitter.getMaxPrimaryKey(tableSchema);
+		if( maxPk != null ) {
+			res = new HashMap<String, Condition>();
+			for (String key : maxPk.keySet()) {
+				if ( maxPk.get(key) != null ) {
+					String val = maxPk.get(key).toString();
+					boolean isNumber = val.matches("^[0-9-]*$");
+					AttributeValue attrVal = isNumber ? new AttributeValue().withN( val ) : new AttributeValue( val );
+					Condition gt = new Condition();
+					gt.setComparisonOperator("GT");
+					res.put( key, gt.withAttributeValueList( attrVal ) );
+				} 
+			}
+		}
+
+		return res;
+	}
+
 	public long replicateData(int maxScanRate) {
 		RateLimiter rateLimiter = RateLimiter.create(maxScanRate);
-
 		Map<String,AttributeValue> lastEvaluatedScanKey = null;
 		long numRowsReplicated = 0;
-
-		while(true) {
-			ScanResult scanResult = scanWithRetries(lastEvaluatedScanKey);
-
+		Map<String, Condition> filters = getMaxPkFilterConditions( tableSchema );
+		while( true ) {
+			ScanResult scanResult = scanWithRetries(lastEvaluatedScanKey, filters );
+			
 			if (addColumnsEnabled) {
 				for(Map<String,AttributeValue> dynamoItem : scanResult.getItems()) {
 					addNewColumns(dynamoItem);
@@ -247,16 +275,17 @@ public class DynamoDBTableReplicator {
 
 				tableRowBatch.addRow(tableRow);
 			}
-
-			LOG.info(String.format("Replicated %d rows to table %s", tableRowBatch.size(), tableSchema.tableName));
-
+			if(tableRowBatch.size() > 0) {
+				LOG.info(String.format("Replicated %d rows to table %s", tableRowBatch.size(), tableSchema.tableName));
+			}
+			
 			numRowsReplicated += tableRowBatch.size();
 
 			/* load the batch using COPY */
 			emitter.copyFromReader(tableSchema, tableRowBatch.asCopyReader());
 
 			lastEvaluatedScanKey = scanResult.getLastEvaluatedKey();
-
+			
 			if(lastEvaluatedScanKey == null) {
 				break;
 			}
@@ -276,14 +305,33 @@ public class DynamoDBTableReplicator {
 		return numRowsReplicated;
 	}
 
-	private ScanResult scanWithRetries(Map<String, AttributeValue> lastEvaluatedScanKey) {
+	private List<Map<String,AttributeValue>> queryTable(Map<String, Condition> startKeys) {
+		QueryRequest spec = new QueryRequest()
+			.withTableName( this.dynamoTableName )
+			.withConsistentRead(true);
+
+		for (String key : startKeys.keySet()) {
+			spec.addKeyConditionsEntry(key, startKeys.get(key));
+		} 
+
+		List<Map<String,AttributeValue>> items = dynamoDBClient.query(spec).getItems();
+		
+		return items;
+	}
+
+	private ScanResult scanWithRetries(Map<String, AttributeValue> lastEvaluatedScanKey, Map<String, Condition> filters) {
 		ScanRequest scanRequest = new ScanRequest().
 				withTableName(this.dynamoTableName).
 				withConsistentRead(true).
 				withReturnConsumedCapacity(ReturnConsumedCapacity.TOTAL).
 				withLimit(100).
 				withExclusiveStartKey(lastEvaluatedScanKey);
-
+		if( filters != null ) {
+			for (String key : filters.keySet()) {
+				scanRequest.addScanFilterEntry(key, filters.get(key));
+			}
+		}
+		
 		for (int tryNumber = 1; ; tryNumber++) {
 			try {
 				ScanResult scanResult = dynamoDBClient.scan(scanRequest);
@@ -455,7 +503,7 @@ public class DynamoDBTableReplicator {
 			/* don't add new columns in jsonb mode */
 			return;
 		}
-
+		
 		for(Map.Entry<String,AttributeValue> entry : item.entrySet()) {
 			String keyName = entry.getKey();
 			String columnName = dynamoKeyToColumnName(keyName);

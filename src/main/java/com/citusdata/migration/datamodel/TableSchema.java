@@ -8,6 +8,9 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 
 /**
  * @author marco
@@ -81,7 +84,7 @@ public class TableSchema {
 	}
 
 	public void addIndex(String indexName, List<String> indexColumns) {
-		this.tableIndexes.add(new TableIndex(this.tableName, indexName, indexColumns));
+		this.tableIndexes.add(new TableIndex(this.schemaName, this.tableName, indexName, indexColumns));
 	}
 
 	public static boolean requiresQuotes(String identifier) {
@@ -340,6 +343,35 @@ public class TableSchema {
 
 		sb.append(")");
 
+		return sb.toString();
+	}
+
+	public String getMaxPrimaryKeyDml() {
+		StringBuilder sb = new StringBuilder();
+		StringBuilder pkSb = new StringBuilder();
+		StringBuilder pkOb = new StringBuilder();
+		sb.append("SELECT ");
+		boolean skipSeparator = true;
+
+		for (String columnName : getPrimaryKeyColumnNames() ) {
+			if (!skipSeparator) {
+				pkSb.append(", ");
+				pkOb.append(", ");
+			}
+
+			pkSb.append(TableSchema.quoteIdentifier(columnName));
+			pkOb.append(TableSchema.quoteIdentifier(columnName));
+			pkOb.append(" DESC");
+
+			skipSeparator = false;
+		}
+		sb.append(pkSb.toString());
+		sb.append(" FROM ");
+		sb.append(getQualifiedTableName());
+		sb.append(" ORDER BY ");
+		sb.append(pkOb.toString());
+		sb.append(" LIMIT 1;");
+		
 		return sb.toString();
 	}
 

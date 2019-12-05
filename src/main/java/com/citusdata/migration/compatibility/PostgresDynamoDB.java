@@ -53,6 +53,8 @@ import com.amazonaws.services.dynamodbv2.model.TagResourceRequest;
 import com.amazonaws.services.dynamodbv2.model.TagResourceResult;
 import com.amazonaws.services.dynamodbv2.model.UntagResourceRequest;
 import com.amazonaws.services.dynamodbv2.model.UntagResourceResult;
+import com.amazonaws.services.dynamodbv2.model.UpdateGlobalTableRequest;
+import com.amazonaws.services.dynamodbv2.model.UpdateGlobalTableResult;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemRequest;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemResult;
 import com.amazonaws.services.dynamodbv2.model.UpdateTableRequest;
@@ -62,12 +64,14 @@ import com.amazonaws.services.dynamodbv2.model.UpdateTimeToLiveResult;
 import com.amazonaws.services.dynamodbv2.model.WriteRequest;
 import com.amazonaws.services.dynamodbv2.waiters.AmazonDynamoDBWaiters;
 import com.citusdata.migration.datamodel.TableSchema;
+import com.amazonaws.services.dynamodbv2.model.UpdateGlobalTableSettingsResult;
+import com.amazonaws.services.dynamodbv2.model.UpdateGlobalTableSettingsRequest;
 
 /**
  * @author marco
  *
  */
-public class PostgresDynamoDB implements AmazonDynamoDB {
+public class PostgresDynamoDB extends com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient {
 
 	final Connection connection;
 	final Map<String,TableSchema> schemaCache;
@@ -88,248 +92,9 @@ public class PostgresDynamoDB implements AmazonDynamoDB {
 	}
 
 	@Override
-	public BatchGetItemResult batchGetItem(BatchGetItemRequest batchGetItemRequest) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public BatchGetItemResult batchGetItem(Map<String, KeysAndAttributes> requestItems, String returnConsumedCapacity) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public BatchGetItemResult batchGetItem(Map<String, KeysAndAttributes> requestItems) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public BatchWriteItemResult batchWriteItem(BatchWriteItemRequest batchWriteItemRequest) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public BatchWriteItemResult batchWriteItem(Map<String, List<WriteRequest>> requestItems) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public CreateTableResult createTable(CreateTableRequest createTableRequest) {
-	    throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public CreateTableResult createTable(List<AttributeDefinition> attributeDefinitions, String tableName,
-			List<KeySchemaElement> keySchema, ProvisionedThroughput provisionedThroughput) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
 	public DeleteItemResult deleteItem(DeleteItemRequest deleteItemRequest) {
 		
 		return null;
-	}
-
-	@Override
-	public DeleteItemResult deleteItem(String tableName, Map<String, AttributeValue> key) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DeleteItemResult deleteItem(String tableName, Map<String, AttributeValue> key, String returnValues) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DeleteTableResult deleteTable(DeleteTableRequest deleteTableRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DeleteTableResult deleteTable(String tableName) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DescribeLimitsResult describeLimits(DescribeLimitsRequest describeLimitsRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DescribeTableResult describeTable(DescribeTableRequest describeTableRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DescribeTableResult describeTable(String tableName) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public DescribeTimeToLiveResult describeTimeToLive(DescribeTimeToLiveRequest describeTimeToLiveRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public GetItemResult getItem(GetItemRequest getItemRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public GetItemResult getItem(String tableName, Map<String, AttributeValue> key) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public GetItemResult getItem(String tableName, Map<String, AttributeValue> key, Boolean consistentRead) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ListTablesResult listTables(ListTablesRequest listTablesRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ListTablesResult listTables() {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ListTablesResult listTables(String exclusiveStartTableName) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ListTablesResult listTables(String exclusiveStartTableName, Integer limit) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ListTablesResult listTables(Integer limit) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ListTagsOfResourceResult listTagsOfResource(ListTagsOfResourceRequest listTagsOfResourceRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public PutItemResult putItem(PutItemRequest putItemRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public PutItemResult putItem(String tableName, Map<String, AttributeValue> item) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public PutItemResult putItem(String tableName, Map<String, AttributeValue> item, String returnValues) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public QueryResult query(QueryRequest queryRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ScanResult scan(ScanRequest scanRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ScanResult scan(String tableName, List<String> attributesToGet) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ScanResult scan(String tableName, Map<String, Condition> scanFilter) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public ScanResult scan(String tableName, List<String> attributesToGet, Map<String, Condition> scanFilter) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public TagResourceResult tagResource(TagResourceRequest tagResourceRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UntagResourceResult untagResource(UntagResourceRequest untagResourceRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UpdateItemResult updateItem(UpdateItemRequest updateItemRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UpdateItemResult updateItem(
-			String tableName,
-			Map<String, AttributeValue> key,
-			Map<String, AttributeValueUpdate> attributeUpdates) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UpdateItemResult updateItem(String tableName, Map<String, AttributeValue> key,
-			Map<String, AttributeValueUpdate> attributeUpdates, String returnValues) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UpdateTableResult updateTable(UpdateTableRequest updateTableRequest) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UpdateTableResult updateTable(String tableName, ProvisionedThroughput provisionedThroughput) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public UpdateTimeToLiveResult updateTimeToLive(UpdateTimeToLiveRequest updateTimeToLiveRequest) {
-		
-		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -339,17 +104,4 @@ public class PostgresDynamoDB implements AmazonDynamoDB {
 		} catch (SQLException e) {
 		}
 	}
-
-	@Override
-	public ResponseMetadata getCachedResponseMetadata(AmazonWebServiceRequest request) {
-		
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public AmazonDynamoDBWaiters waiters() {
-		throw new UnsupportedOperationException();
-	}
-
-
 }

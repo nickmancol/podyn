@@ -7,6 +7,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.sql.SQLException;
+import java.util.Map;
 
 import com.citusdata.migration.datamodel.PrimaryKeyValue;
 import com.citusdata.migration.datamodel.TableColumn;
@@ -22,9 +23,9 @@ public class StdoutSQLEmitter implements TableEmitter {
 
 	public StdoutSQLEmitter() {
 	}
-	
+
 	@Override
-	public TableSchema fetchSchema(String tableName) {
+	public TableSchema fetchSchema(String tableName, String schemaName) {
 		return null;
 	}
 
@@ -35,7 +36,7 @@ public class StdoutSQLEmitter implements TableEmitter {
 
 	@Override
 	public void createColumn(TableColumn column) {
-		System.out.println(column.toAlterTableAddColumn()+";");
+		System.out.println(column.toAlterTableAddColumn() + ";");
 	}
 
 	@Override
@@ -44,7 +45,7 @@ public class StdoutSQLEmitter implements TableEmitter {
 		String line = null;
 
 		try (BufferedReader br = new BufferedReader(reader)) {
-			System.out.println(tableSchema.copyFromStdin()+";");
+			System.out.println(tableSchema.copyFromStdin() + ";");
 
 			while ((line = br.readLine()) != null) {
 				System.out.println(line);
@@ -56,23 +57,29 @@ public class StdoutSQLEmitter implements TableEmitter {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
+
 		return numLines;
 	}
 
 	@Override
 	public void upsert(TableRow tableRow) {
-		System.out.println(tableRow.toUpsert()+";");
+		System.out.println(tableRow.toUpsert() + ";");
 	}
 
 	@Override
 	public void delete(PrimaryKeyValue primaryKeyValue) {
-		System.out.println(primaryKeyValue.toDelete()+";");
+		System.out.println(primaryKeyValue.toDelete() + ";");
 	}
 
 	@Override
 	public void close() {
-		
+
+	}
+
+	@Override
+	public Map<String, Object> getMaxPrimaryKey(TableSchema tableSchema) throws EmissionException {
+		System.out.println(tableSchema.getMaxPrimaryKeyDml());
+		return null;
 	}
 
 }

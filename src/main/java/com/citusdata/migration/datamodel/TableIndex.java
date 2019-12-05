@@ -3,13 +3,14 @@ package com.citusdata.migration.datamodel;
 import java.util.List;
 
 public class TableIndex {
-
+	public final String schemaName;
 	public final String tableName;
 	public final String name;
 	
 	private final List<String> columnNames;
 
-	public TableIndex(String tableName, String name, List<String> columnNames) {
+	public TableIndex(String schemaName, String tableName, String name, List<String> columnNames) {
+		this.schemaName = schemaName;
 		this.tableName = tableName;
 		this.name = name;
 		this.columnNames = columnNames;
@@ -21,6 +22,7 @@ public class TableIndex {
 		sb.append("CREATE INDEX ");
 		sb.append(TableSchema.quoteIdentifier(name));
 		sb.append(" ON ");
+		sb.append(schemaName+".");
 		sb.append(TableSchema.quoteIdentifier(tableName));
 		sb.append(" (");
 		

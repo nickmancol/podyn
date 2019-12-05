@@ -1,0 +1,58 @@
+buildscript {
+  repositories {
+    jcenter()
+  }
+  dependencies {
+  }
+}
+
+group 'com.merqueo.data'
+version '1.0'
+
+apply plugin: 'groovy'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile 'org.codehaus.groovy:groovy-all:2.5.7'
+  compile 'com.amazonaws:aws-java-sdk-dynamodb:1.11.607'
+  compile 'com.amazonaws:amazon-kinesis-client:1.7.6'
+  compile 'com.amazonaws:dynamodb-streams-kinesis-adapter:1.2.2'
+  compile 'org.postgresql:postgresql:42.1.1'
+  compile 'com.google.guava:guava:22.0'
+  compile 'commons-cli:commons-cli:1.4'
+  compile 'commons-logging:commons-logging:1.2'
+  compile 'org.apache.logging.log4j:log4j-api:2.8.2'
+  compile 'org.apache.logging.log4j:log4j-core:2.8.2'
+  compile 'org.apache.logging.log4j:log4j-jcl:2.8.2'
+  testCompile 'junit:junit:4.12'
+  testCompile 'org.spockframework:spock-core:1.1-groovy-2.4'
+}
+
+task runScript (dependsOn: 'classes', type: JavaExec) {
+    main = 'com.merqueo.data.dynamocrawler.Main'
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+jar {
+    manifest {
+        attributes "Main-Class": "com.merqueo.data.dynamocrawler.Main"
+    }
+ 
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+test {
+    useJUnit {
+        includeCategories 'com.merqueo.data.dynamocrawler.UnitTest'
+    }
+    testLogging {
+        showStandardStreams = true
+    }
+}
+
+defaultTasks 'runScript'

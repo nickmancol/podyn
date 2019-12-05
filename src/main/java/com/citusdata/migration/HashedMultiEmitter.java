@@ -3,7 +3,9 @@ package com.citusdata.migration;
 import java.io.IOException;
 import java.io.Reader;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -12,6 +14,7 @@ import com.citusdata.migration.datamodel.TableColumn;
 import com.citusdata.migration.datamodel.TableEmitter;
 import com.citusdata.migration.datamodel.TableRow;
 import com.citusdata.migration.datamodel.TableSchema;
+import com.google.common.collect.Tables;
 
 /*
  * HashedMultiEmitter can be used to perform concurrent writes across a pool of
@@ -38,12 +41,12 @@ public class HashedMultiEmitter implements TableEmitter {
 	}
 
 	@Override
-	public TableSchema fetchSchema(String tableName) {
+	public TableSchema fetchSchema(String tableName, String schemaName) {
 		lock.writeLock().lock();
 
 		try {
 			TableEmitter emitter = emitters.get(0);
-			return emitter.fetchSchema(tableName);
+			return emitter.fetchSchema(tableName, schemaName);
 		} finally {
 			lock.writeLock().unlock();
 		}
@@ -140,11 +143,23 @@ public class HashedMultiEmitter implements TableEmitter {
 		lock.writeLock().lock();
 
 		try {
-			for(TableEmitter emitter : emitters) {
+			for (TableEmitter emitter : emitters) {
 				emitter.close();
 			}
 		} finally {
 			lock.writeLock().unlock();
+		}
+	}
+
+	@Override
+	public Map<String, Object> getMaxPrimaryKey(TableSchema tableSchema) throws EmissionException {
+		lock.readLock().lock();
+		try {
+			TableEmitter emitter = emitters.get(0);
+
+			return emitter.getMaxPrimaryKey(tableSchema);
+		} finally {
+			lock.readLock().unlock();
 		}
 	}
 
